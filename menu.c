@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include "tad_configs.h"
 int menu() {
-    printf("1. Aguardar\n2. Simular\n3. Terminar\n4. Ler\n0. Sair\n");
+    printf("1. Aguardar\n2. Simular\n3. Terminar\n4. Ler\n5. Gerar Ficha\n6. Mostrar fila\n0. Sair\n");
     printf("Informe a opção desejada: ");
     int aux;
     scanf("%d", &aux);
@@ -39,7 +39,17 @@ int main() {
               configs_mostrar(tad_configs);
               break;
           }
+          case 5: {
+              configs_gerar_ficha(tad_configs);
+              break;
+          }
+          case 6: {
+              carregar_fila_arquivo(tad_configs); // Só aqui!
+              mostrar_fila(tad_configs);
+              break;
+        }
           case 0: {
+              limpar_fila(tad_configs);
               configs_destruir(tad_configs);
               printf("Até a próxima!\n");
               break;

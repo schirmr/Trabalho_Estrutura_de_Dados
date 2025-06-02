@@ -2,8 +2,9 @@
 #include <unistd.h>
 #include "tad_configs.h"
 
-void simular(int tempo) {
-    printf("Simulando...\n");
+void simular(TadConfigs *tad_configs, int tempo) {
+    carregar_fila_arquivo(tad_configs);
+    simular_atendimento(tad_configs);
     sleep(tempo);
 }
 
@@ -22,7 +23,7 @@ int main() {
     while(tad_configs->configs.status != TERMINAR) {
         sleep(1);
         if(tad_configs->configs.status == SIMULAR) {
-            simular(2);
+            simular(tad_configs, 1);
         } else {
             printf("Aguardando...\n");
         }
