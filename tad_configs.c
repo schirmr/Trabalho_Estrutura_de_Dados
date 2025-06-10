@@ -21,7 +21,14 @@ typedef struct {
     int proximo_id;
 } FilaPacientes;
 
-FilaPacientes fila_pacientes = {NULL, NULL, 1};
+typedef struct NoPrioridade {
+    int prioridade; // 1 a 5
+    FilaPacientes fila;
+    struct NoPrioridade *esq, *dir;
+} NoPrioridade;
+
+NoPrioridade *raiz_prioridades = NULL; // raiz da árvore BST
+FilaPacientes fila_pacientes = {NULL, NULL, 1}; //fila
 
 TadConfigs *configs_inicializar() {//const char *nome_arquivo
     TadConfigs *tad = malloc(sizeof(TadConfigs));
@@ -72,6 +79,91 @@ void configs_salvar(TadConfigs *tad) {
     configs_fechar(arquivo);
 }
 
+NoPrioridade* inserir_prioridade(NoPrioridade **raiz, int prioridade) {
+    if (*raiz == NULL) {
+        *raiz = malloc(sizeof(NoPrioridade));
+        (*raiz)->prioridade = prioridade;
+        (*raiz)->fila.inicio = NULL;
+        (*raiz)->fila.fim = NULL;
+        (*raiz)->fila.proximo_id = 1;
+        (*raiz)->esq = (*raiz)->dir = NULL;
+        return *raiz;
+    }
+    if (prioridade < (*raiz)->prioridade)
+        return inserir_prioridade(&(*raiz)->esq, prioridade);
+    else if (prioridade > (*raiz)->prioridade)
+        return inserir_prioridade(&(*raiz)->dir, prioridade);
+    else
+        return *raiz;
+}
+
+NoPrioridade* buscar_prioridade(NoPrioridade *raiz, int prioridade) {
+    if (!raiz) return NULL;
+    if (prioridade < raiz->prioridade)
+        return buscar_prioridade(raiz->esq, prioridade);
+    else if (prioridade > raiz->prioridade)
+        return buscar_prioridade(raiz->dir, prioridade);
+    else
+        return raiz;
+}
+
+int calcular_proximo_id(FilaPacientes *fila) {
+    int id = 1;
+    Paciente *atual = fila->inicio;
+    while (atual) {
+        if (atual->id >= id)
+            id = atual->id + 1;
+        atual = atual->prox;
+    }
+    return id;
+}
+
+NoPrioridade* remover_prioridade(NoPrioridade *raiz, int prioridade) {
+    if (!raiz) return NULL;
+    if (prioridade < raiz->prioridade)
+        raiz->esq = remover_prioridade(raiz->esq, prioridade);
+    else if (prioridade > raiz->prioridade)
+        raiz->dir = remover_prioridade(raiz->dir, prioridade);
+    else {
+        if (!raiz->esq) {
+            NoPrioridade *tmp = raiz->dir;
+            free(raiz);
+            return tmp;
+        } else if (!raiz->dir) {
+            NoPrioridade *tmp = raiz->esq;
+            free(raiz);
+            return tmp;
+        } else {
+            NoPrioridade *tmp = raiz->dir;
+            while (tmp->esq) tmp = tmp->esq;
+            raiz->prioridade = tmp->prioridade;
+            raiz->fila = tmp->fila;
+            raiz->dir = remover_prioridade(raiz->dir, tmp->prioridade);
+        }
+    }
+    return raiz;
+}
+
+void limpar_fila_prioridade(FilaPacientes *fila) {
+    Paciente *atual = fila->inicio;
+    while (atual) {
+        Paciente *tmp = atual;
+        atual = atual->prox;
+        free(tmp);
+    }
+    fila->inicio = NULL;
+    fila->fim = NULL;
+    fila->proximo_id = 1;
+}
+
+void limpar_arvore(NoPrioridade *raiz) {
+    if (!raiz) return;
+    limpar_arvore(raiz->esq);
+    limpar_arvore(raiz->dir);
+    limpar_fila_prioridade(&raiz->fila);
+    free(raiz);
+}
+
 void carregar_fila_arquivo(TadConfigs *tad) {
     FILE *arquivo = configs_abrir();
     if (!arquivo) {
@@ -80,10 +172,36 @@ void carregar_fila_arquivo(TadConfigs *tad) {
     }
     fread(&tad->configs, sizeof(Configs), 1, arquivo);
 
+    // Limpa todas as filas e a árvore
+    limpar_fila(tad);
+
+    // Carrega prioridades 1 a 5
+    for (int p = 1; p <= 5; p++) {
+        int count = 0;
+        fread(&count, sizeof(int), 1, arquivo);
+        NoPrioridade *no = NULL;
+        for (int i = 0; i < count; i++) {
+            Paciente temp;
+            fread(&temp, sizeof(Paciente), 1, arquivo);
+            Paciente *novo = malloc(sizeof(Paciente));
+            *novo = temp;
+            novo->prox = NULL;
+            if (!no) no = inserir_prioridade(&raiz_prioridades, p);
+            if (no->fila.fim) {
+                no->fila.fim->prox = novo;
+            } else {
+                no->fila.inicio = novo;
+            }
+            no->fila.fim = novo;
+        }
+        // Atualiza o proximo_id da fila da prioridade
+        if (no)
+            no->fila.proximo_id = calcular_proximo_id(&no->fila);
+    }
+
+    // Fila comum (prioridade 6)
     int count = 0;
     fread(&count, sizeof(int), 1, arquivo);
-
-    limpar_fila(tad);
     for (int i = 0; i < count; i++) {
         Paciente temp;
         fread(&temp, sizeof(Paciente), 1, arquivo);
@@ -96,9 +214,10 @@ void carregar_fila_arquivo(TadConfigs *tad) {
             fila_pacientes.inicio = novo;
         }
         fila_pacientes.fim = novo;
-        if (novo->id >= fila_pacientes.proximo_id)
-            fila_pacientes.proximo_id = novo->id + 1;
     }
+    // Atualiza o proximo_id da fila comum
+    fila_pacientes.proximo_id = calcular_proximo_id(&fila_pacientes);
+
     configs_fechar(arquivo);
 }
 
@@ -111,7 +230,23 @@ void salvar_fila_arquivo(TadConfigs *tad) {
     // Salva as configurações primeiro
     fwrite(&tad->configs, sizeof(Configs), 1, arquivo);
 
-    // Conta quantos pacientes existem
+    // Salva as filas de prioridades 1 a 5
+    for (int p = 1; p <= 5; p++) {
+        NoPrioridade *no = buscar_prioridade(raiz_prioridades, p);
+        int count = 0;
+        Paciente *atual = no ? no->fila.inicio : NULL;
+        while (atual) {
+            count++;
+            atual = atual->prox;
+        }
+        fwrite(&count, sizeof(int), 1, arquivo);
+        atual = no ? no->fila.inicio : NULL;
+        while (atual) {
+            fwrite(atual, sizeof(Paciente), 1, arquivo);
+            atual = atual->prox;
+        }
+    }
+    // Salva a fila comum (prioridade 6)
     int count = 0;
     Paciente *atual = fila_pacientes.inicio;
     while (atual) {
@@ -119,8 +254,6 @@ void salvar_fila_arquivo(TadConfigs *tad) {
         atual = atual->prox;
     }
     fwrite(&count, sizeof(int), 1, arquivo);
-
-    // Salva cada paciente
     atual = fila_pacientes.inicio;
     while (atual) {
         fwrite(atual, sizeof(Paciente), 1, arquivo);
@@ -130,27 +263,48 @@ void salvar_fila_arquivo(TadConfigs *tad) {
 }
 
 void limpar_fila(TadConfigs *tad) {
-    Paciente *atual = fila_pacientes.inicio;
-    while (atual) {
-        Paciente *tmp = atual;
-        atual = atual->prox;
-        free(tmp);
-    }
-    fila_pacientes.inicio = NULL;
-    fila_pacientes.fim = NULL;
+    // Limpa árvore de prioridades
+    limpar_arvore(raiz_prioridades);
+    raiz_prioridades = NULL;
+    // Limpa fila comum
+    limpar_fila_prioridade(&fila_pacientes);
     fila_pacientes.proximo_id = 1;
 }
 
-void mostrar_fila(TadConfigs *tad) {
-    Paciente *atual = fila_pacientes.inicio;
-    if (!atual) {
-        printf("Fila vazia!\n");
-        return;
+const char* texto_prioridade(int prioridade) {
+    switch (prioridade) {
+        case 1: return "Gestante";
+        case 2: return "Idoso";
+        case 3: return "PNE";
+        case 4: return "Criança de colo";
+        case 5: return "Doença crônica";
+        default: return "Demais";
     }
-    printf("Fila de pacientes:\n");
+}
+
+void mostrar_fila(TadConfigs *tad) {
+    int vazia = 1;
+    // Mostrar prioridades 1 a 5
+    for (int p = 1; p <= 5; p++) {
+        NoPrioridade *no = buscar_prioridade(raiz_prioridades, p);
+        Paciente *atual = no ? no->fila.inicio : NULL;
+        while (atual) {
+            printf("ID: %d | Nome: %s | Médico: %s | Tempo: %d | Prioridade: %s\n",
+                atual->id, atual->nome, atual->medico, atual->tempo, texto_prioridade(p));
+            atual = atual->prox;
+            vazia = 0;
+        }
+    }
+    // Mostrar fila comum (prioridade 6)
+    Paciente *atual = fila_pacientes.inicio;
     while (atual) {
-        printf("ID: %d | Nome: %s | Médico: %s | Tempo: %d\n", atual->id, atual->nome, atual->medico, atual->tempo);
+        printf("ID: %d | Nome: %s | Médico: %s | Tempo: %d | Prioridade: Demais\n",
+            atual->id, atual->nome, atual->medico, atual->tempo);
         atual = atual->prox;
+        vazia = 0;
+    }
+    if (vazia) {
+        printf("Fila vazia!\n");
     }
 }
 
@@ -173,7 +327,7 @@ void configs_gerar_ficha(TadConfigs *tad) {
 
     int op;
     printf("Escolha o médico:\n");
-    printf("1. Dermatologista\n2. Psiquiatra\n3. Cardiologista\n4. Ortopedista\n");
+    printf("1. Dermatologista\n2. Psiquiatra\n3. Cardiologista\n4. Ortopedista\n5. Pediatra\nQualquer outro numero: Clínico Geral\n");
     printf("Opção: ");
     scanf("%d", &op);
 
@@ -182,19 +336,70 @@ void configs_gerar_ficha(TadConfigs *tad) {
         case 2: strcpy(nova->medico, "Psiquiatra"); break;
         case 3: strcpy(nova->medico, "Cardiologista"); break;
         case 4: strcpy(nova->medico, "Ortopedista"); break;
+        case 5: strcpy(nova->medico, "Pediatra"); break;
         default: strcpy(nova->medico, "Clínico Geral"); break;
+    }
+
+    int prioridade;
+    printf("Informe a prioridade do paciente (1-Gestante, 2-Idoso, 3-PNE, 4-Criança de colo, 5-Doença crônica, 6-Demais): ");
+    scanf("%d", &prioridade);
+
+    nova->prox = NULL;
+
+    if (prioridade >= 1 && prioridade <= 5) {
+    NoPrioridade *no = inserir_prioridade(&raiz_prioridades, prioridade);
+    if (no->fila.inicio) {
+        no->fila.proximo_id = calcular_proximo_id(&no->fila);
+    } else {
+        no->fila.proximo_id = 1;
+    }
+    nova->id = no->fila.proximo_id++;
+    if (no->fila.fim) {
+        no->fila.fim->prox = nova;
+    } else {
+        no->fila.inicio = nova;
+    }
+    no->fila.fim = nova;
+    } 
+    else {
+        // prioridade 6: fila comum
+        fila_pacientes.proximo_id = calcular_proximo_id(&fila_pacientes);
+        nova->id = fila_pacientes.proximo_id++;
+        if (fila_pacientes.fim) {
+            fila_pacientes.fim->prox = nova;
+        } else {
+            fila_pacientes.inicio = nova;
+        }
+        fila_pacientes.fim = nova;
     }
 
     nova->prox = NULL;
 
-    if (fila_pacientes.fim) {
-        fila_pacientes.fim->prox = nova;
-    } else {
-        fila_pacientes.inicio = nova;
-    }
-    fila_pacientes.fim = nova;
     salvar_fila_arquivo(tad);
-    printf("Ficha gerada: %d - %d - %s - %s\n", nova->id, nova->tempo, nova->nome, nova->medico);
+    printf("Ficha gerada: %d - %d - %s - %s - Prioridade: %s\n", nova->id, nova->tempo, nova->nome, nova->medico, texto_prioridade(prioridade));
+}
+
+Paciente* remover_proximo_paciente() {
+    for (int p = 1; p <= 5; p++) {
+        NoPrioridade *no = buscar_prioridade(raiz_prioridades, p);
+        if (no && no->fila.inicio) {
+            Paciente *tmp = no->fila.inicio;
+            no->fila.inicio = tmp->prox;
+            if (!no->fila.inicio) no->fila.fim = NULL;
+            // Remove nó se fila ficou vazia
+            if (!no->fila.inicio)
+                raiz_prioridades = remover_prioridade(raiz_prioridades, p);
+            return tmp;
+        }
+    }
+    // Fila comum
+    if (fila_pacientes.inicio) {
+        Paciente *tmp = fila_pacientes.inicio;
+        fila_pacientes.inicio = tmp->prox;
+        if (!fila_pacientes.inicio) fila_pacientes.fim = NULL;
+        return tmp;
+    }
+    return NULL;
 }
 
 void remover_primeira_ficha(TadConfigs *tad) {
@@ -208,34 +413,27 @@ void remover_primeira_ficha(TadConfigs *tad) {
 }
 
 void simular_atendimento(TadConfigs *tad) {
-    while (fila_pacientes.inicio) {
-        configs_ler(tad);
-        if (tad->configs.status != SIMULAR) {
-            printf("Simulação interrompida! Voltando para aguardando.\n");
-            break;
-        }
-        Paciente *atual = fila_pacientes.inicio;
+    Paciente *atual;
+    while ((atual = remover_proximo_paciente())) {
+        // ... atendimento igual ao seu código ...
         printf("ID: %d\n", atual->id);
         printf("Nome: %s\n", atual->nome);
         printf("Médico: %s\n", atual->medico);
         printf("Tempo de atendimento: %d segundos\n", atual->tempo);
-
         for (int i = 0; i < atual->tempo; i++) {
             sleep(1);
             configs_ler(tad);
             if (tad->configs.status == AGUARDAR) {
                 printf("Atendimento interrompido! Voltando para aguardando.\n");
+                free(atual);
                 return;
             }
         }
-
-        remover_primeira_ficha(tad);
         printf("Atendimento finalizado!\n\n");
+        free(atual);
     }
-    if(fila_pacientes.inicio == NULL) {
-        printf("Não há fichas na fila.\n");
-        salvar_fila_arquivo(tad);
-    }
+    printf("Não há fichas na fila.\n");
+    salvar_fila_arquivo(tad);
 }
 
 void configs_ler(TadConfigs *tad) {

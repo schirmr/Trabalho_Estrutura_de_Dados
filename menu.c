@@ -44,7 +44,7 @@ int main() {
               break;
           }
           case 6: {
-              carregar_fila_arquivo(tad_configs); // Só aqui!
+              carregar_fila_arquivo(tad_configs);
               mostrar_fila(tad_configs);
               break;
         }
