@@ -2,15 +2,16 @@
 #include <unistd.h>
 #include "tad_configs.h"
 int menu() {
-    printf("1. Aguardar\n2. Simular\n3. Terminar\n4. Ler\n5. Gerar Ficha\n6. Mostrar fila\n0. Sair\n");
+    printf("1. Aguardar\n2. Simular\n3. Terminar\n4. Ler\n5. Gerar Ficha\n6. Mostrar fila\n7. Relatorio quantitativo de especialidades\n0. Sair\n");
     printf("Informe a opção desejada: ");
     int aux;
     scanf("%d", &aux);
     return aux;
 }
 int main() {
+  int relatorio[6] = {0};
   TadConfigs *tad_configs;
-  int op;
+  int op, opmedicos;
   // Criar TAD e abrir arquivo
   tad_configs = configs_inicializar();
   if (!tad_configs) {
@@ -40,7 +41,9 @@ int main() {
               break;
           }
           case 5: {
-              configs_gerar_ficha(tad_configs);
+              opmedicos = configs_gerar_ficha(tad_configs);
+              if (opmedicos > 0 && opmedicos < 6)relatorio[opmedicos-1]++;
+              else relatorio[5]++;
               break;
           }
           case 6: {
@@ -48,7 +51,23 @@ int main() {
               mostrar_fila(tad_configs);
               break;
         }
+          case 7:{
+            printf("Dermatologista: %d\n", relatorio[0]);
+            printf("Psiquiatra: %d\n", relatorio[1]);
+            printf("Cardiologista: %d\n", relatorio[2]);
+            printf("Ortopedista: %d\n", relatorio[3]);
+            printf("Pediatra: %d\n", relatorio[4]);
+            printf("Clinico Geral: %d\n", relatorio[5]);
+            break;
+          }
           case 0: {
+              printf("Relatório final:\n");
+              printf("Dermatologista: %d\n", relatorio[0]);
+              printf("Psiquiatra: %d\n", relatorio[1]);
+              printf("Cardiologista: %d\n", relatorio[2]);
+              printf("Ortopedista: %d\n", relatorio[3]);
+              printf("Pediatra: %d\n", relatorio[4]);
+              printf("Clinico Geral: %d\n", relatorio[5]);
               limpar_fila(tad_configs);
               configs_destruir(tad_configs);
               printf("Até a próxima!\n");

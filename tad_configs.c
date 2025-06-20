@@ -108,14 +108,10 @@ NoPrioridade* buscar_prioridade(NoPrioridade *raiz, int prioridade) {
 }
 
 int calcular_proximo_id(FilaPacientes *fila) {
-    int id = 1;
-    Paciente *atual = fila->inicio;
-    while (atual) {
-        if (atual->id >= id)
-            id = atual->id + 1;
-        atual = atual->prox;
+    if(fila->fim == NULL) {
+        return 1; // Se a fila está vazia, o próximo ID é 1
     }
-    return id;
+    return fila->fim->id + 1; // Retorna o próximo ID baseado no último paciente da fila
 }
 
 NoPrioridade* remover_prioridade(NoPrioridade *raiz, int prioridade) {
@@ -308,7 +304,7 @@ void mostrar_fila(TadConfigs *tad) {
     }
 }
 
-void configs_gerar_ficha(TadConfigs *tad) {
+int configs_gerar_ficha(TadConfigs *tad) {
     configs_atualizar(tad, AGUARDAR, 1); // Volta para AGUARDAR antes de gerar ficha p/ evitar perda de dados
 
     carregar_fila_arquivo(tad);
@@ -316,7 +312,7 @@ void configs_gerar_ficha(TadConfigs *tad) {
     Paciente *nova = malloc(sizeof(Paciente));
     if (!nova) {
         printf("Erro ao alocar ficha.\n");
-        return;
+        return -1;
     }
 
     nova->id = fila_pacientes.proximo_id++;
@@ -377,6 +373,7 @@ void configs_gerar_ficha(TadConfigs *tad) {
 
     salvar_fila_arquivo(tad);
     printf("Ficha gerada: %d - %d - %s - %s - Prioridade: %s\n", nova->id, nova->tempo, nova->nome, nova->medico, texto_prioridade(prioridade));
+    return op;
 }
 
 Paciente* remover_proximo_paciente() {
@@ -415,11 +412,36 @@ void remover_primeira_ficha(TadConfigs *tad) {
 void simular_atendimento(TadConfigs *tad) {
     Paciente *atual;
     while ((atual = remover_proximo_paciente())) {
-        // ... atendimento igual ao seu código ...
         printf("ID: %d\n", atual->id);
         printf("Nome: %s\n", atual->nome);
         printf("Médico: %s\n", atual->medico);
         printf("Tempo de atendimento: %d segundos\n", atual->tempo);
+        
+        // Procurar próximo com prioridade (1 a 5)
+        Paciente *prox_prior = NULL;
+        int prox_prioridade = 0;
+        for (int p = 1; p <= 5; p++) {
+            NoPrioridade *no = buscar_prioridade(raiz_prioridades, p);
+            if (no && no->fila.inicio) {
+                prox_prior = no->fila.inicio;
+                prox_prioridade = p;
+                break;
+            }
+        }
+        if (prox_prior) {
+            printf("Proximo com prioridade: %s - %s\n", texto_prioridade(prox_prioridade), prox_prior->nome);
+        } else {
+            printf("Proximo com prioridade: Nenhum\n");
+        }
+        
+        // Procurar próximo sem prioridade (fila comum)
+        if (fila_pacientes.inicio) {
+            printf("Proximo sem prioridade: %s\n", fila_pacientes.inicio->nome);
+        } else {
+            printf("Proximo sem prioridade: Nenhum\n");
+        }
+
+        // Simulacao do atendimento
         for (int i = 0; i < atual->tempo; i++) {
             sleep(1);
             configs_ler(tad);

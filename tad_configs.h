@@ -43,7 +43,7 @@ void configs_ler(TadConfigs *tad);
 void configs_mostrar(TadConfigs *tad);
 void configs_atualizar(TadConfigs *tad, statusProcessamento status, int intervalo);
 void simular_atendimento(TadConfigs *tad);
-void configs_gerar_ficha(TadConfigs *tad);
+int configs_gerar_ficha(TadConfigs *tad);
 void mostrar_fila(TadConfigs *tad);
 void limpar_fila(TadConfigs *tad);
 void salvar_fila_arquivo(TadConfigs *tad);
